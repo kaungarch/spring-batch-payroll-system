@@ -3,6 +3,7 @@ package com.kaung.payroll.batch;
 import com.kaung.payroll.batch.domain.MonthlyPayroll;
 import com.kaung.payroll.batch.domain.Payroll;
 import com.kaung.payroll.batch.listener.PayrollItemReadListener;
+import com.kaung.payroll.batch.listener.ReportListener;
 import com.kaung.payroll.batch.processor.PayrollItemProcessor;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
@@ -31,12 +32,14 @@ public class PayrollConfig {
     public Job job(
             JobRepository jobRepository,
             Step step1,
-            Step step2
+            Step step2,
+            Step step3
     )
     {
         return new JobBuilder("monthlyPayrollJob", jobRepository)
                 .start(step1)
                 .next(step2)
+                .next(step3)
                 .build();
     }
 
@@ -64,7 +67,8 @@ public class PayrollConfig {
             FlatFileItemReader<Payroll> payrollFlatFileItemReader,
             PayrollItemProcessor payrollItemProcessor,
             JdbcBatchItemWriter<MonthlyPayroll> jdbcBatchItemWriter,
-            ItemReadListener<Payroll> itemReadListener
+            ItemReadListener<Payroll> itemReadListener,
+            ReportListener reportListener
     )
     {
         return new StepBuilder("fileIngestion", jobRepository)
@@ -77,6 +81,18 @@ public class PayrollConfig {
                 .skip(FlatFileParseException.class)
                 .skipLimit(10)
                 .listener(itemReadListener)
+                .listener(reportListener)
+                .build();
+    }
+
+    @Bean
+    public Step step3(
+            JobRepository jobRepository,
+            ReportTasklet reportTasklet
+    )
+    {
+        return new StepBuilder("reportStep", jobRepository)
+                .tasklet(reportTasklet)
                 .build();
     }
 
@@ -141,6 +157,21 @@ public class PayrollConfig {
     )
     {
         return new PayrollItemReadListener(errorFilePath);
+    }
+
+    @Bean
+    public ReportListener reportListener()
+    {
+        return new ReportListener();
+    }
+
+    @Bean
+    @StepScope
+    public ReportTasklet reportTasklet(
+            @Value("#{jobParameters['report.file']}") String reportFile
+    )
+    {
+        return new ReportTasklet(reportFile);
     }
 
 }

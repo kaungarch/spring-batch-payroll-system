@@ -32,8 +32,9 @@ public class PayrollItemReadListener implements ItemReadListener<Payroll> {
         int lineNumber = exception.getLineNumber();
         String line = lineNumber + "|" + rawLine + System.lineSeparator();
 
-        System.out.println("SKIPPED LINE " + line);
         try {
+            Files.createDirectories(this.errorFilePath.getParent());
+
             Files.writeString(this.errorFilePath, line, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
         } catch (IOException e) {
             throw new RuntimeException("Unable to write skipped line " + lineNumber);
