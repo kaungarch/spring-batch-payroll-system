@@ -2,35 +2,27 @@ package com.kaung.payroll.batch;
 
 import com.kaung.payroll.batch.domain.MonthlyPayroll;
 import com.kaung.payroll.batch.domain.Payroll;
-import com.kaung.payroll.batch.listener.PayrollSkipListener;
+import com.kaung.payroll.batch.listener.PayrollItemReadListener;
 import com.kaung.payroll.batch.processor.PayrollItemProcessor;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
+import org.springframework.batch.core.listener.ItemReadListener;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.batch.core.step.skip.NonSkippableReadException;
-import org.springframework.batch.infrastructure.item.ItemProcessor;
 import org.springframework.batch.infrastructure.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.infrastructure.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.infrastructure.item.file.FlatFileItemReader;
 import org.springframework.batch.infrastructure.item.file.FlatFileParseException;
-import org.springframework.batch.infrastructure.item.file.LineMapper;
 import org.springframework.batch.infrastructure.item.file.builder.FlatFileItemReaderBuilder;
-import org.springframework.batch.infrastructure.item.file.mapping.DefaultLineMapper;
-import org.springframework.batch.infrastructure.item.file.mapping.FieldSetMapper;
-import org.springframework.batch.infrastructure.item.file.transform.DelimitedLineTokenizer;
-import org.springframework.batch.infrastructure.item.validator.BeanValidatingItemProcessor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.support.JdbcTransactionManager;
-import org.springframework.validation.BindException;
 
 import javax.sql.DataSource;
-import java.util.Objects;
 
 @Configuration
 public class PayrollConfig {
@@ -68,21 +60,23 @@ public class PayrollConfig {
     @Bean
     public Step step2(
             JobRepository jobRepository,
-            FlatFileItemReader<Payroll> flatFileItemReader,
+            JdbcTransactionManager transactionManager,
+            FlatFileItemReader<Payroll> payrollFlatFileItemReader,
             PayrollItemProcessor payrollItemProcessor,
             JdbcBatchItemWriter<MonthlyPayroll> jdbcBatchItemWriter,
-            PayrollSkipListener skipListener
+            ItemReadListener<Payroll> itemReadListener
     )
     {
         return new StepBuilder("fileIngestion", jobRepository)
                 .<Payroll, MonthlyPayroll>chunk(50)
-                .reader(flatFileItemReader)
+                .transactionManager(transactionManager)
+                .reader(payrollFlatFileItemReader)
                 .processor(payrollItemProcessor)
                 .writer(jdbcBatchItemWriter)
-//                .faultTolerant()
-//                .skip(FlatFileParseException.class)
-//                .skipLimit(10)
-//                .listener(skipListener)
+                .faultTolerant()
+                .skip(FlatFileParseException.class)
+                .skipLimit(10)
+                .listener(itemReadListener)
                 .build();
     }
 
@@ -95,6 +89,7 @@ public class PayrollConfig {
         return new FlatFileItemReaderBuilder<Payroll>()
                 .name("payRollFlatFileReader")
                 .resource(new FileSystemResource(inputFile))
+                .linesToSkip(1)
                 .delimited()
                 .names(
                         "employeeId",
@@ -141,11 +136,11 @@ public class PayrollConfig {
 
     @Bean
     @StepScope
-    public PayrollSkipListener payrollSkipListener(
+    public ItemReadListener<Payroll> itemReadListener(
             @Value("#{jobParameters['error.file']}") String errorFilePath
     )
     {
-        return new PayrollSkipListener(errorFilePath);
+        return new PayrollItemReadListener(errorFilePath);
     }
 
 }

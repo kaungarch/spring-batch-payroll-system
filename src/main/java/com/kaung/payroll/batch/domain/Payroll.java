@@ -11,9 +11,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Builder
 public class Payroll {
-    @NotBlank
+
     String employeeId;
-    @NotBlank
     String name;
     String jobPosition;
     long baseSalary;
